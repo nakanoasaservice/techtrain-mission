@@ -1,0 +1,236 @@
+openapi: 3.0.1
+info:
+  description: "TechTrain MISSION ゲームAPI入門仕様\n まずはこのAPI仕様に沿って機能を実装してみましょう。\n \n この\
+    画面の各APIの「Try it out」->「Execute」を利用することで\n ローカル環境で起動中のAPIにAPIリクエストをすることができます。"
+  title: TechTrain MISSION Game API
+  version: 1.0.0
+servers:
+- url: http://localhost:8080/
+tags:
+- description: ユーザ関連API
+  name: user
+- description: ガチャ関連API
+  name: gacha
+- description: キャラクター関連API
+  name: character
+paths:
+  /user/create:
+    post:
+      description: |-
+        ユーザ情報を作成します。
+         ユーザの名前情報をリクエストで受け取り、ユーザIDと認証用のトークンを生成しデータベースへ保存します。
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+        description: Request Body
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCreateResponse'
+          description: A successful response.
+      summary: ユーザ情報作成API
+      tags:
+      - user
+      x-codegen-request-body-name: body
+  /user/get:
+    get:
+      description: |-
+        ユーザ情報を取得します。
+         ユーザの認証と特定の処理はリクエストヘッダのx-tokenを読み取ってデータベースに照会をします。
+      parameters:
+      - description: 認証トークン
+        in: header
+        name: x-token
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserGetResponse'
+          description: A successful response.
+      summary: ユーザ情報取得API
+      tags:
+      - user
+  /user/update:
+    put:
+      description: |-
+        ユーザ情報の更新をします。
+         初期実装では名前の更新を行います。
+      parameters:
+      - description: 認証トークン
+        in: header
+        name: x-token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+        description: Request Body
+        required: true
+      responses:
+        "200":
+          content: {}
+          description: A successful response.
+      summary: ユーザ情報更新API
+      tags:
+      - user
+      x-codegen-request-body-name: body
+  /gacha/draw:
+    post:
+      description: "ガチャを引いてキャラクターを取得する処理を実装します。\n 獲得したキャラクターはユーザ所持キャラクターテーブルへ保存します\
+        。\n 同じ種類のキャラクターでもユーザは複数所持することができます。\n \n キャラクターの確率は等倍ではなく、任意に変更できるようテーブルを設\
+        計しましょう。"
+      parameters:
+      - description: 認証トークン
+        in: header
+        name: x-token
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GachaDrawRequest'
+        description: Request Body
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GachaDrawResponse'
+          description: A successful response.
+      summary: ガチャ実行API
+      tags:
+      - gacha
+      x-codegen-request-body-name: body
+  /character/list:
+    get:
+      description: ユーザが所持しているキャラクター一覧情報を取得します。
+      parameters:
+      - description: 認証トークン
+        in: header
+        name: x-token
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharacterListResponse'
+          description: A successful response.
+      summary: ユーザ所持キャラクター一覧取得API
+      tags:
+      - character
+components:
+  schemas:
+    UserCreateRequest:
+      example:
+        name: name
+      properties:
+        name:
+          description: ユーザ名
+          type: string
+      type: object
+    UserCreateResponse:
+      example:
+        token: token
+      properties:
+        token:
+          description: クライアント側で保存するトークン
+          type: string
+      type: object
+    UserGetResponse:
+      example:
+        name: name
+      properties:
+        name:
+          description: ユーザ名
+          type: string
+      type: object
+    UserUpdateRequest:
+      example:
+        name: name
+      properties:
+        name:
+          description: ユーザ名
+          type: string
+      type: object
+    GachaDrawRequest:
+      example:
+        times: 0
+      properties:
+        times:
+          description: 実行回数
+          type: integer
+      type: object
+    GachaDrawResponse:
+      example:
+        results:
+        - name: name
+          characterID: characterID
+        - name: name
+          characterID: characterID
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/GachaResult'
+          type: array
+      type: object
+    GachaResult:
+      example:
+        name: name
+        characterID: characterID
+      properties:
+        characterID:
+          description: キャラクターID
+          type: string
+        name:
+          description: キャラクター名
+          type: string
+      type: object
+    CharacterListResponse:
+      example:
+        characters:
+        - userCharacterID: userCharacterID
+          name: name
+          characterID: characterID
+        - userCharacterID: userCharacterID
+          name: name
+          characterID: characterID
+      properties:
+        characters:
+          items:
+            $ref: '#/components/schemas/UserCharacter'
+          type: array
+      type: object
+    UserCharacter:
+      example:
+        userCharacterID: userCharacterID
+        name: name
+        characterID: characterID
+      properties:
+        userCharacterID:
+          description: ユニークID
+          type: string
+        characterID:
+          description: キャラクターID
+          type: string
+        name:
+          description: キャラクター名
+          type: string
+      type: object

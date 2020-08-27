@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8000:8080"
+    volumes:
+      - ./api/openapi.yaml:/openapi.yaml
+    environment:
+      SWAGGER_JSON: /openapi.yaml
+  db:
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    volumes:
+      - app-db-data:/var/lib/mysql
+    env_file:
+      - .env
+
+volumes:
+  app-db-data:
