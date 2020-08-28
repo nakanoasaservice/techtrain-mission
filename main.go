@@ -11,6 +11,8 @@ package main
 
 import (
 	"log"
+	"techtrain-mission/go/db"
+
 	// WARNING!
 	// Change this to a fully-qualified import path
 	// once you place this file into your project.
@@ -23,6 +25,8 @@ import (
 
 func main() {
 	log.Printf("Server started")
+
+	db.Init()
 
 	router := sw.NewRouter()
 

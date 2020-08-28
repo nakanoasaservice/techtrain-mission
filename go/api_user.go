@@ -10,22 +10,78 @@
 package openapi
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"net/http"
+	"techtrain-mission/go/db"
+	"techtrain-mission/go/model"
 )
 
 // UserCreatePost - ユーザ情報作成API
 func UserCreatePost(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	var req UserCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	uuidToken, err := uuid.NewRandom()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	token := uuidToken.String()
+
+	err = db.GetDB().Insert(&model.User{Name: req.Name, Token: token})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, UserCreateResponse{Token: token})
 }
 
 // UserGetGet - ユーザ情報取得API
 func UserGetGet(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	token := c.GetHeader("X-Token")
+
+	var user model.User
+	err := db.GetDB().SelectOne(&user, "select * from User where Token=?", token)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, UserGetResponse{Name: user.Name})
 }
 
 // UserUpdatePut - ユーザ情報更新API
 func UserUpdatePut(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	var req UserUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token := c.GetHeader("X-Token")
+
+	dbmap := db.GetDB()
+
+	var user model.User
+	err := dbmap.SelectOne(&user, "select * from User where Token=?", token)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// TODO: もう少しスマートにやる方法があるはず
+	user.Name = req.Name
+
+	// TODO: update where TokenのようにできればワンクエリでいけるがORM的にどうなのか？
+	_, err = dbmap.Update(&user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 }
