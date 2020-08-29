@@ -10,12 +10,30 @@
 package openapi
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
+	"net/http"
+	"techtrain-mission/go/db"
 )
 
 // CharacterListGet - ユーザ所持キャラクター一覧取得API
 func CharacterListGet(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	token := c.GetHeader("X-Token")
+
+	// TODO: もう少し簡潔にできるはず（JWTなどを使えばUserIDはトークンから取得できるためサブクエリは必要ない）
+	query := "select UserCharacter.ID as UserCharacterID," +
+		" `Character`.ID as CharacterID," +
+		" `Character`.Name as Name" +
+		" from UserCharacter " +
+		"inner join `Character` on UserCharacter.CharacterID = `Character`.ID" +
+		" where UserCharacter.UserID = ( " +
+		"select Id from User where User.Token = ?" +
+		");"
+
+	var characters []UserCharacter
+	_, err := db.GetDB().Select(&characters, query, token)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	c.JSON(http.StatusOK, CharacterListResponse{Characters: characters})
 }
