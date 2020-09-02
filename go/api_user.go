@@ -11,31 +11,40 @@ package openapi
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"net/http"
 	"techtrain-mission/go/db"
+	"techtrain-mission/go/helper"
 	"techtrain-mission/go/model"
 )
 
 // UserCreatePost - ユーザ情報作成API
 func UserCreatePost(c *gin.Context) {
 	var req UserCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := c.BindJSON(&req); err != nil {
 		return
 	}
 
-	uuidToken, err := uuid.NewRandom()
+	trans, err := db.GetDB().Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+	}
+
+	user := model.User{Name: req.Name}
+
+	err = trans.Insert(&user)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
 		return
 	}
 
-	token := uuidToken.String()
-
-	err = db.GetDB().Insert(&model.User{Name: req.Name, Token: token})
+	token, err := helper.GenerateToken(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+
+	if err := trans.Commit(); err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
 		return
 	}
 
@@ -45,43 +54,45 @@ func UserCreatePost(c *gin.Context) {
 // UserGetGet - ユーザ情報取得API
 func UserGetGet(c *gin.Context) {
 	token := c.GetHeader("X-Token")
-
-	var user model.User
-	err := db.GetDB().SelectOne(&user, "select * from User where Token=?", token)
+	userID, err := helper.GetUserIDFromToken(token)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		_ = c.AbortWithError(http.StatusUnauthorized, err).SetType(gin.ErrorTypePrivate)
 		return
 	}
+
+	obj, err := db.GetDB().Get(model.User{}, userID)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+	user := obj.(*model.User)
 
 	c.JSON(http.StatusOK, UserGetResponse{Name: user.Name})
 }
 
 // UserUpdatePut - ユーザ情報更新API
 func UserUpdatePut(c *gin.Context) {
-	var req UserUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	token := c.GetHeader("X-Token")
-
-	dbmap := db.GetDB()
-
-	var user model.User
-	err := dbmap.SelectOne(&user, "select * from User where Token=?", token)
+	userID, err := helper.GetUserIDFromToken(token)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		_ = c.AbortWithError(http.StatusUnauthorized, err).SetType(gin.ErrorTypePrivate)
 		return
 	}
 
-	// TODO: もう少しスマートにやる方法があるはず
-	user.Name = req.Name
+	var req UserUpdateRequest
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
 
-	// TODO: update where TokenのようにできればワンクエリでいけるがORM的にどうなのか？
-	_, err = dbmap.Update(&user)
+	// TODO: Userカラムが増えた場合どうするのか
+	user := model.User{
+		ID:   userID,
+		Name: req.Name,
+	}
+
+	_, err = db.GetDB().Update(&user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
 		return
 	}
 }

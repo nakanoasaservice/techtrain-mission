@@ -13,26 +13,31 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"techtrain-mission/go/db"
+	"techtrain-mission/go/helper"
 )
 
 // CharacterListGet - ユーザ所持キャラクター一覧取得API
 func CharacterListGet(c *gin.Context) {
 	token := c.GetHeader("X-Token")
+	userID, err := helper.GetUserIDFromToken(token)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusUnauthorized, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
 
-	// TODO: もう少し簡潔にできるはず（JWTなどを使えばUserIDはトークンから取得できるためサブクエリは必要ない）
-	query := "select UserCharacter.ID as UserCharacterID," +
-		" `Character`.ID as CharacterID," +
-		" `Character`.Name as Name" +
-		" from UserCharacter " +
-		"inner join `Character` on UserCharacter.CharacterID = `Character`.ID" +
-		" where UserCharacter.UserID = ( " +
-		"select Id from User where User.Token = ?" +
-		");"
+	// TODO: 簡潔にできる?
+	query := "select UserCharacter.ID as UserCharacterID, " +
+		"`Character`.ID as CharacterID, " +
+		"`Character`.Name as Name " +
+		"from UserCharacter " +
+		"inner join `Character` on UserCharacter.CharacterID = `Character`.ID " +
+		"where UserCharacter.UserID = ?;"
 
 	var characters []UserCharacter
-	_, err := db.GetDB().Select(&characters, query, token)
+	_, err = db.GetDB().Select(&characters, query, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
 	}
 
 	c.JSON(http.StatusOK, CharacterListResponse{Characters: characters})

@@ -12,5 +12,5 @@ package openapi
 type GachaDrawRequest struct {
 
 	// 実行回数
-	Times int32 `json:"times,omitempty"`
+	Times int32 `json:"times,omitempty" binding:"required"`
 }

@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
+	"techtrain-mission/go/helper"
 	"techtrain-mission/go/model"
 )
 
@@ -32,19 +33,33 @@ func Init() {
 		log.Fatal(err)
 	}
 
-	table := db.AddTable(model.User{})
-	table.ColMap("Token").SetUnique(true).SetNotNull(true)
+	db.AddTable(model.User{})
+	db.AddTable(model.Character{})
+	db.AddTable(model.UserCharacter{})
+	db.AddTable(model.Gacha{})
+	db.AddTable(model.GachaCharactersOdds{})
 
-	table = db.AddTable(model.Character{})
-
-	table = db.AddTable(model.UserCharacter{})
+	_ = db.DropTablesIfExists()
 
 	err = db.CreateTablesIfNotExists()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	InsertSeeds(db)
+	trans, err := db.Begin()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := InsertSeeds(trans); err != nil {
+		if err2 := trans.Rollback(); err2 != nil {
+			log.Print(err)
+			log.Fatal(err2)
+		}
+		log.Fatal(err)
+	}
+	if err := trans.Commit(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 //ConnectDB ...
@@ -70,27 +85,48 @@ func GetDB() *gorp.DbMap {
 	return db
 }
 
-func InsertSeeds(db *gorp.DbMap) {
-	user := model.User{Name: "ユウキ", Token: "ea4fa3dd-ddaf-418f-a936-2cf0f6e43c58"}
-	err := db.Insert(&user)
+func InsertSeeds(trans *gorp.Transaction) error {
+	user := model.User{Name: "ユウキ"}
+	err := trans.Insert(&user)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	token, err := helper.GenerateToken(user.ID)
+	if err != nil {
+		return err
+	}
+	log.Print("first users token is ", token)
 
 	characters := [...] model.Character{
 		{Name: "コロ"}, {Name: "ペコ"}, {Name: "キャル"},
 	}
-	for i := range characters {
-		err = db.Insert(&characters[i])
-		if err != nil {
-			log.Fatal(err)
-		}
+
+	// TODO: charactersを[]interface{}にキャストできない理由が知りたい
+	err = trans.Insert(&characters[0], &characters[1], &characters[2])
+	if err != nil {
+		return err
 	}
-	log.Println(characters)
 
 	ownership := model.UserCharacter{UserID: user.ID, CharacterID: characters[0].ID}
-	err = db.Insert(&ownership)
+	err = trans.Insert(&ownership)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	gacha := model.Gacha{Name: "通常ガチャ"}
+	err = trans.Insert(&gacha)
+	if err != nil {
+		return err
+	}
+
+	err = trans.Insert(
+		&model.GachaCharactersOdds{GachaID: gacha.ID, CharacterID: characters[0].ID, Odds: 1.0 / 3},
+		&model.GachaCharactersOdds{GachaID: gacha.ID, CharacterID: characters[1].ID, Odds: 1.0 / 3},
+		&model.GachaCharactersOdds{GachaID: gacha.ID, CharacterID: characters[2].ID, Odds: 1.0 / 3},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -12,17 +12,18 @@ package openapi
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 )
 
 // Route is the information for every URI.
 type Route struct {
 	// Name is the name of this Route.
-	Name        string
+	Name string
 	// Method is the string for the HTTP method. ex) GET, POST etc..
-	Method      string
+	Method string
 	// Pattern is the pattern of the URI.
-	Pattern     string
+	Pattern string
 	// HandlerFunc is the handler function of this route.
 	HandlerFunc gin.HandlerFunc
 }
@@ -34,10 +35,8 @@ type Routes []Route
 func NewRouter() *gin.Engine {
 	router := gin.Default()
 
-	config := cors.DefaultConfig()
-	config.AllowHeaders = append(config.AllowHeaders, "x-token")
-	config.AllowAllOrigins = true
-	router.Use(cors.New(config))
+	router.Use(newCorsMiddleware())
+	router.Use(newHandleErrorMiddleware())
 
 	for _, route := range routes {
 		switch route.Method {
@@ -53,6 +52,23 @@ func NewRouter() *gin.Engine {
 	}
 
 	return router
+}
+
+func newCorsMiddleware() gin.HandlerFunc {
+	config := cors.DefaultConfig()
+	config.AllowHeaders = append(config.AllowHeaders, "x-token")
+	config.AllowAllOrigins = true
+	return cors.New(config)
+}
+
+func newHandleErrorMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		for _, err := range c.Errors.Errors() {
+			log.Print(err)
+		}
+	}
 }
 
 // Index is the index handler.

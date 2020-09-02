@@ -12,5 +12,5 @@ package openapi
 type UserUpdateRequest struct {
 
 	// ユーザ名
-	Name string `json:"name,omitempty"`
+	Name string `json:"name,omitempty" binding:"required"`
 }

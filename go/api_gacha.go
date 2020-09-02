@@ -10,12 +10,87 @@
 package openapi
 
 import (
-	"net/http"
-
+	crand "crypto/rand"
 	"github.com/gin-gonic/gin"
+	"github.com/seehuhn/mt19937"
+	"math"
+	"math/big"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"techtrain-mission/go/db"
+	"techtrain-mission/go/helper"
+	"techtrain-mission/go/model"
 )
 
 // GachaDrawPost - ガチャ実行API
 func GachaDrawPost(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
+	token := c.GetHeader("X-Token")
+	userID, err := helper.GetUserIDFromToken(token)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+
+
+	var req GachaDrawRequest
+	if err := c.BindJSON(&req); err != nil {
+		return
+	}
+
+	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+	rng := rand.New(mt19937.New())
+	rng.Seed(seed.Int64())
+
+	dbmap := db.GetDB()
+
+	var characters []struct {
+		model.GachaCharactersOdds
+		model.Character
+	}
+	query := "select * from GachaCharactersOdds " +
+		"join `Character` on GachaCharactersOdds.CharacterID = `Character`.ID " +
+		"where GachaID = 1;"
+	_, err = dbmap.Select(&characters, query)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+
+	var userCharacters []interface{}
+	var results []GachaResult
+
+	for i := int32(0); i < req.Times; i++ {
+		num := rng.Float64()
+
+		acc := 0.0
+		for _, character := range characters {
+			acc += character.Odds
+			if num <= acc {
+				results = append(results, GachaResult{
+					Name:        character.Name,
+					CharacterID: strconv.FormatUint(uint64(character.CharacterID), 10),
+				})
+
+				userCharacters = append(userCharacters, &model.UserCharacter{
+					UserID:      userID,
+					CharacterID: character.CharacterID,
+				})
+				break
+			}
+		}
+	}
+
+	err = dbmap.Insert(userCharacters...)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusInternalServerError, err).SetType(gin.ErrorTypePrivate)
+		return
+	}
+
+
+	c.JSON(http.StatusOK, GachaDrawResponse{Results: results})
 }

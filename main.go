@@ -12,6 +12,7 @@ package main
 import (
 	"log"
 	"techtrain-mission/go/db"
+	"techtrain-mission/go/helper"
 
 	// WARNING!
 	// Change this to a fully-qualified import path
@@ -26,6 +27,7 @@ import (
 func main() {
 	log.Printf("Server started")
 
+	helper.Init()
 	db.Init()
 
 	router := sw.NewRouter()
